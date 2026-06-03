@@ -1,20 +1,19 @@
-name = "ip-query"
+name = "ip"
 main = "src/index.ts"
 compatibility_date = "2026-05-04"
 workers_dev = true
-# Uncomment and set your custom domain:
-# routes = [
-#   { pattern = "your-domain.com", custom_domain = true }
-# ]
+routes = [
+  { pattern = "88586688.xyz", custom_domain = true }
+]
 
 [[d1_databases]]
 binding = "DB"
 database_name = "ip-query-db"
-database_id = "your-main-d1-database-id"
+database_id = "f450c1af-6da2-45b8-8d11-e3c711ef6149"
 migrations_dir = "migrations"
 
 [[d1_databases]]
 binding = "CITY_DB"
 database_name = "ip-query-city-db"
-database_id = "your-city-d1-database-id"
+database_id = "a5fcc2f4-bbce-4dfe-b81c-fe1f6429a159"
 migrations_dir = "migrations-city"
