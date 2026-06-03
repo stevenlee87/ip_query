@@ -766,7 +766,7 @@ function webUiHtml(): string {
     let latestData = null;
 
     const fields = [
-      ["District", "countryName", "countryCode"],
+      ["Location", "countryName", "countryCode"],
       ["Continent", "continentName", "continentCode"],
       ["Region", "region"],
       ["City", "city"],
