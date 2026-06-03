@@ -1,10 +1,36 @@
+# Dependencies
 node_modules/
+
+# Wrangler build & cache
 .wrangler/
 dist/
+
+# Wrangler config with real IDs/domains — use wrangler.toml.example as template
+wrangler.toml
+
+# Environment variables
+.env
+.env.*
+.dev.vars
+
+# Test coverage
 coverage/
+
+# Logs
 *.log
+
+# Data files
 generated/
 data/generated/
 data/raw/dbip-city/*.csv.gz
 data/raw/
+
+# Docs
 docs/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
