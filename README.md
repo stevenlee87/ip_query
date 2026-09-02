@@ -255,13 +255,13 @@ Expected row counts after a full September 2026 import:
 
 | Table | Rows |
 |---|---|
-| `ip_city_locations` | 567,049 |
-| `ip_city_v4_ranges` | 3,687,752 |
-| `ip_city_v6_ranges` | 4,373,909 |
-| `ip_asn_ranges` (IPv4) | 389,132 |
-| `ip_asn_ranges` (IPv6) | 94,042 |
-| `ip_country_ranges` (IPv4) | 220,736 |
-| `ip_country_ranges` (IPv6) | 64,467 |
+| `ip_city_locations` | 562,487 |
+| `ip_city_v4_ranges` | 3,588,539 |
+| `ip_city_v6_ranges` | 4,160,441 |
+| `ip_asn_ranges` (IPv4) | 402,147 |
+| `ip_asn_ranges` (IPv6) | 96,666 |
+| `ip_country_ranges` (IPv4) | 227,567 |
+| `ip_country_ranges` (IPv6) | 66,531 |
 
 ---
 
