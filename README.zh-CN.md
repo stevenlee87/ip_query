@@ -126,8 +126,8 @@ Worker 在运行时**不调用任何外部 API**，所有数据通过离线导�
 
 ```bash
 mkdir -p data/raw/dbip-city
-curl -L 'https://download.db-ip.com/free/dbip-city-lite-2026-05.csv.gz' \
-  -o data/raw/dbip-city/dbip-city-lite-2026-05.csv.gz
+curl -L 'https://download.db-ip.com/free/dbip-city-lite-2026-09.csv.gz' \
+  -o data/raw/dbip-city/dbip-city-lite-2026-09.csv.gz
 ```
 
 DB-IP City Lite 采用 `CC BY 4.0` 许可。API 响应中会包含 DB-IP 的署名信息。如果你在其他服务或 UI 中展示地理结果，请保留该署名。
@@ -203,7 +203,7 @@ python3 scripts/csv-to-d1-sql.py \
 ```bash
 rm -rf data/generated/city-normalized
 python3 scripts/dbip-city-to-d1-sql.py \
-  data/raw/dbip-city/dbip-city-lite-2026-05.csv.gz \
+  data/raw/dbip-city/dbip-city-lite-2026-09.csv.gz \
   data/generated/city-normalized \
   --location-chunk-size 50000 \
   --range-chunk-size 100000
@@ -260,7 +260,7 @@ for file in data/generated/city-normalized/v6/*.sql; do
 done
 ```
 
-完整导入后（2026 年 5 月数据集）的预期行数：
+完整导入后（2026 年 9 月数据集）的预期行数：
 
 | 表 | 行数 |
 |---|---|

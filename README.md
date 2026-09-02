@@ -126,8 +126,8 @@ The worker does not call any external geo API at runtime. It derives `countryNam
 
 ```bash
 mkdir -p data/raw/dbip-city
-curl -L 'https://download.db-ip.com/free/dbip-city-lite-2026-05.csv.gz' \
-  -o data/raw/dbip-city/dbip-city-lite-2026-05.csv.gz
+curl -L 'https://download.db-ip.com/free/dbip-city-lite-2026-09.csv.gz' \
+  -o data/raw/dbip-city/dbip-city-lite-2026-09.csv.gz
 ```
 
 DB-IP City Lite is licensed under `CC BY 4.0`. The API response includes a DB-IP attribution entry whenever the result uses `dbip-city-lite`. Keep that attribution visible if another service or UI redisplays the geo result.
@@ -199,7 +199,7 @@ python3 scripts/csv-to-d1-sql.py \
 ```bash
 rm -rf data/generated/city-normalized
 python3 scripts/dbip-city-to-d1-sql.py \
-  data/raw/dbip-city/dbip-city-lite-2026-05.csv.gz \
+  data/raw/dbip-city/dbip-city-lite-2026-09.csv.gz \
   data/generated/city-normalized \
   --location-chunk-size 50000 \
   --range-chunk-size 100000
@@ -251,7 +251,7 @@ for file in data/generated/city-normalized/v6/*.sql; do
 done
 ```
 
-Expected row counts after a full May 2026 import:
+Expected row counts after a full September 2026 import:
 
 | Table | Rows |
 |---|---|
