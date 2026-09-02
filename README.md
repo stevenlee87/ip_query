@@ -227,6 +227,8 @@ wrangler d1 execute ip-query-db --remote --command "DELETE FROM ip_asn_ranges;"
 wrangler d1 execute ip-query-db --remote --command "DELETE FROM ip_country_ranges;"
 ```
 
+> **Warning (D1 free tier):** deleting rows counts toward the daily **rows read** limit (5M/day on the free plan). A full refresh deletes ~9M rows across both databases and will exhaust the quota, making every geo query return `GEO_LOOKUP_FAILED` until the limit resets at 00:00 UTC. Verify with a cheap query after the DELETEs, avoid `COUNT(*)` on the big tables right after import (it also scans rows), or upgrade to Workers Paid before refreshing.
+
 **Import chunks into remote D1:**
 
 ```bash

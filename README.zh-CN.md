@@ -231,6 +231,8 @@ wrangler d1 execute ip-query-db --remote --command "DELETE FROM ip_asn_ranges;"
 wrangler d1 execute ip-query-db --remote --command "DELETE FROM ip_country_ranges;"
 ```
 
+> **注意（D1 免费版）：** 删除行同样计入每日**行读取**限额（免费版每天 500 万行）。全量刷新需删除两个库共约 900 万行旧数据，会直接耗尽当日配额，导致所有 geo 查询返回 `GEO_LOOKUP_FAILED`，直到 UTC 00:00（北京时间早上 8 点）配额重置。建议：DELETE 后只用轻量查询验证；导入后避免立刻对大表执行 `COUNT(*)`（同样按扫描行数计费）；或升级 Workers Paid 后再刷新。
+
 **导入到远程 D1：**
 
 ```bash
