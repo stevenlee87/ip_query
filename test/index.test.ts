@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import worker, { ipToComparableHex } from "../src/index";
+import worker, { ipToComparableHex, specialPurposeRange } from "../src/index";
 
 type FakeRow = Record<string, unknown> | null;
 
@@ -50,6 +50,32 @@ describe("ipToComparableHex", () => {
       version: 6,
       hex: "20014860486000000000000000008888"
     });
+  });
+});
+
+describe("specialPurposeRange", () => {
+  it("detects special-purpose addresses without touching D1", () => {
+    expect(specialPurposeRange("10.0.0.1")).toBe("private");
+    expect(specialPurposeRange("172.16.0.1")).toBe("private");
+    expect(specialPurposeRange("192.168.1.1")).toBe("private");
+    expect(specialPurposeRange("127.0.0.1")).toBe("loopback");
+    expect(specialPurposeRange("169.254.1.1")).toBe("linkLocal");
+    expect(specialPurposeRange("100.64.1.1")).toBe("carrierGradeNat");
+    expect(specialPurposeRange("224.0.0.1")).toBe("multicast");
+    expect(specialPurposeRange("240.0.0.1")).toBe("reserved");
+    expect(specialPurposeRange("255.255.255.255")).toBe("broadcast");
+    expect(specialPurposeRange("fe80::1")).toBe("linkLocal");
+    expect(specialPurposeRange("fc00::1")).toBe("uniqueLocal");
+    expect(specialPurposeRange("fd12::1")).toBe("uniqueLocal");
+    expect(specialPurposeRange("ff02::1")).toBe("multicast");
+    expect(specialPurposeRange("::1")).toBe("loopback");
+  });
+
+  it("returns null for public addresses", () => {
+    expect(specialPurposeRange("8.8.8.8")).toBeNull();
+    expect(specialPurposeRange("1.1.1.1")).toBeNull();
+    expect(specialPurposeRange("2400:3200::1")).toBeNull();
+    expect(specialPurposeRange("2a09:bac5:1f4b:16dc::247:5f")).toBeNull();
   });
 });
 
@@ -119,16 +145,19 @@ describe("worker fetch", () => {
     const env = createSplitEnv(
       [
         {
+          end_hex: "08080a08",
           country_code: "US",
           source: "iptoasn-country"
         },
         {
+          end_hex: "0808ffff",
           asn: 15169,
           as_organization: "GOOGLE",
           source: "iptoasn-asn"
         }
       ],
       {
+        end_hex: "08080908",
         continent_code: "NA",
         country_code: "US",
         region: "California",
@@ -161,16 +190,19 @@ describe("worker fetch", () => {
     const env = createSplitEnv(
       [
         {
+          end_hex: "08080a08",
           country_code: "US",
           source: "iptoasn-country"
         },
         {
+          end_hex: "0808ffff",
           asn: 15169,
           as_organization: "GOOGLE",
           source: "iptoasn-asn"
         }
       ],
       {
+        end_hex: "08080908",
         continent_code: "NA",
         country_code: "US",
         region: "California",
@@ -202,16 +234,19 @@ describe("worker fetch", () => {
     const env = createSplitEnv(
       [
         {
+          end_hex: "08080a08",
           country_code: "US",
           source: "iptoasn-country"
         },
         {
+          end_hex: "0808ffff",
           asn: 15169,
           as_organization: "GOOGLE, US",
           source: "iptoasn-asn"
         }
       ],
       {
+        end_hex: "08080908",
         continent_code: "NA",
         country_code: "US",
         region: "California",
@@ -231,9 +266,9 @@ describe("worker fetch", () => {
     const body = (await response.json()) as Record<string, any>;
 
     expect(response.status).toBe(200);
-    expect(env.cityCalls[0]?.bindings).toEqual(["08080808", "08080808"]);
-    expect(env.dbCalls[0]?.bindings).toEqual([4, "08080808", "08080808"]);
-    expect(env.dbCalls[1]?.bindings).toEqual([4, "08080808", "08080808"]);
+    expect(env.cityCalls[0]?.bindings).toEqual(["08080808"]);
+    expect(env.dbCalls[0]?.bindings).toEqual([4, "08080808"]);
+    expect(env.dbCalls[1]?.bindings).toEqual([4, "08080808"]);
     expect(body.ip).toMatchObject({ value: "8.8.8.8", version: 4, source: "query" });
     expect(body.geo).toMatchObject({
       found: true,
@@ -272,16 +307,19 @@ describe("worker fetch", () => {
     const env = createSplitEnv(
       [
         {
+          end_hex: "2a09bac5ffffffffffffffffffffffff",
           country_code: "US",
           source: "iptoasn-country"
         },
         {
+          end_hex: "2a09bacdffffffffffffffffffffffff",
           asn: 13335,
           as_organization: "CLOUDFLARENET",
           source: "iptoasn-asn"
         }
       ],
       {
+        end_hex: "2a09bac51f4b16dcffffffffffffffff",
         continent_code: "AS",
         country_code: "CN",
         region: "Beijing",
@@ -299,15 +337,8 @@ describe("worker fetch", () => {
     const body = (await response.json()) as Record<string, any>;
 
     expect(response.status).toBe(200);
-    expect(env.cityCalls[0]?.bindings).toEqual([
-      "2a09bac51f4b16dc000000000247005f",
-      "2a09bac51f4b16dc000000000247005f"
-    ]);
-    expect(env.dbCalls[0]?.bindings).toEqual([
-      6,
-      "2a09bac51f4b16dc000000000247005f",
-      "2a09bac51f4b16dc000000000247005f"
-    ]);
+    expect(env.cityCalls[0]?.bindings).toEqual(["2a09bac51f4b16dc000000000247005f"]);
+    expect(env.dbCalls[0]?.bindings).toEqual([6, "2a09bac51f4b16dc000000000247005f"]);
     expect(body.geo).toMatchObject({
       found: true,
       countryCode: "CN",
@@ -329,16 +360,19 @@ describe("worker fetch", () => {
     const env = createSplitEnv(
       [
         {
+          end_hex: "2a09bac5ffffffffffffffffffffffff",
           country_code: "US",
           source: "iptoasn-country"
         },
         {
+          end_hex: "2a09bacdffffffffffffffffffffffff",
           asn: 13335,
           as_organization: "CLOUDFLARENET",
           source: "iptoasn-asn"
         }
       ],
       {
+        end_hex: "2a09bac51f4b16dcffffffffffffffff",
         continent_code: "AS",
         country_code: "CN",
         region: "Beijing",
@@ -392,5 +426,60 @@ describe("worker fetch", () => {
 
     expect(response.status).toBe(400);
     expect(body.error).toMatchObject({ code: "IP_NOT_FOUND" });
+  });
+
+  it("short-circuits special-purpose IPs without querying D1", async () => {
+    for (const ip of ["10.0.0.1", "172.16.0.1", "127.0.0.1", "169.254.1.1", "100.64.1.1", "fe80::1", "fc00::1", "fd12::1", "ff02::1", "::1"]) {
+      const env = createSplitEnv([null, null], null);
+
+      const response = await worker.fetch(
+        new Request(`https://example.test/?ip=${ip}`, {
+          headers: { "User-Agent": "vitest" }
+        }),
+        env
+      );
+      const body = (await response.json()) as Record<string, any>;
+
+      expect(response.status).toBe(200);
+      expect(env.dbCalls).toHaveLength(0);
+      expect(env.cityCalls).toHaveLength(0);
+      expect(body.ip.specialRange).toBeTruthy();
+      expect(body.geo).toMatchObject({ found: false, sources: [] });
+    }
+  });
+
+  it("treats a candidate whose end_hex does not cover the IP as a miss", async () => {
+    // 9.9.9.9 = 09090909；候选区间 [01000000, 05000000] 不覆盖它 → found: false
+    const env = createSplitEnv(
+      [
+        { end_hex: "05000000", country_code: "AU", source: "iptoasn-country" },
+        { end_hex: "05000000", asn: 1234, as_organization: "EXAMPLE", source: "iptoasn-asn" }
+      ],
+      {
+        end_hex: "05000000",
+        continent_code: "OC",
+        country_code: "AU",
+        region: "NSW",
+        city: "Sydney",
+        latitude: -33.87,
+        longitude: 151.21,
+        source: "dbip-city-lite"
+      }
+    );
+
+    const response = await worker.fetch(
+      new Request("https://example.test/?ip=9.9.9.9", {
+        headers: { "User-Agent": "vitest" }
+      }),
+      env
+    );
+    const body = (await response.json()) as Record<string, any>;
+
+    expect(response.status).toBe(200);
+    expect(env.cityCalls[0]?.bindings).toEqual(["09090909"]);
+    expect(env.dbCalls[0]?.bindings).toEqual([4, "09090909"]);
+    expect(env.dbCalls[1]?.bindings).toEqual([4, "09090909"]);
+    expect(body.geo).toMatchObject({ found: false, sources: [] });
+    expect(body.ip).toMatchObject({ value: "9.9.9.9", specialRange: null });
   });
 });

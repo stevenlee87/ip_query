@@ -21,6 +21,7 @@ interface TargetIp {
 }
 
 interface CityRangeRow {
+  end_hex?: string | null;
   continent_code?: string | null;
   country_code?: string | null;
   region?: string | null;
@@ -31,12 +32,14 @@ interface CityRangeRow {
 }
 
 interface AsnRangeRow {
+  end_hex?: string | null;
   asn?: number | string | null;
   as_organization?: string | null;
   source?: string | null;
 }
 
 interface CountryRangeRow {
+  end_hex?: string | null;
   country_code?: string | null;
   source?: string | null;
 }
@@ -83,29 +86,36 @@ class HttpError extends Error {
   }
 }
 
+// 区间查询采用"先取候选、JS 里校验"两步：
+// 表内区间两两不重叠（scripts/validate-no-overlap.py 已验证），
+// 因此 start_hex <= X 中 start_hex 最大的那一行是唯一可能包含 X 的区间。
+// 这样未命中时也只读 1 行，避免倒序扫描到表头（曾有 fe80::1 单查读 416 万行的故障）。
 const COUNTRY_LOOKUP_SQL = `
   SELECT
+    end_hex,
     country_code,
     source
   FROM ip_country_ranges
-  WHERE ip_version = ? AND start_hex <= ? AND end_hex >= ?
+  WHERE ip_version = ? AND start_hex <= ?
   ORDER BY start_hex DESC
   LIMIT 1
 `;
 
 const ASN_LOOKUP_SQL = `
   SELECT
+    end_hex,
     asn,
     as_organization,
     source
   FROM ip_asn_ranges
-  WHERE ip_version = ? AND start_hex <= ? AND end_hex >= ?
+  WHERE ip_version = ? AND start_hex <= ?
   ORDER BY start_hex DESC
   LIMIT 1
 `;
 
 const CITY_V4_LOOKUP_SQL = `
   SELECT
+    ranges.end_hex,
     locations.continent_code,
     locations.country_code,
     locations.region,
@@ -115,13 +125,14 @@ const CITY_V4_LOOKUP_SQL = `
     'dbip-city-lite' AS source
   FROM ip_city_v4_ranges AS ranges
   INNER JOIN ip_city_locations AS locations ON locations.id = ranges.location_id
-  WHERE ranges.start_hex <= ? AND ranges.end_hex >= ?
+  WHERE ranges.start_hex <= ?
   ORDER BY ranges.start_hex DESC
   LIMIT 1
 `;
 
 const CITY_V6_LOOKUP_SQL = `
   SELECT
+    ranges.end_hex,
     locations.continent_code,
     locations.country_code,
     locations.region,
@@ -131,10 +142,32 @@ const CITY_V6_LOOKUP_SQL = `
     'dbip-city-lite' AS source
   FROM ip_city_v6_ranges AS ranges
   INNER JOIN ip_city_locations AS locations ON locations.id = ranges.location_id
-  WHERE ranges.start_hex <= ? AND ranges.end_hex >= ?
+  WHERE ranges.start_hex <= ?
   ORDER BY ranges.start_hex DESC
   LIMIT 1
 `;
+
+// 特殊用途地址（内网/保留/链路本地等）不在任何数据源里，直接短路，一次 D1 都不碰。
+// 这些正是旧查询里未命中退化成大扫描的最贵来源。
+const SPECIAL_PURPOSE_V4_RANGES = new Set([
+  "unspecified",
+  "broadcast",
+  "multicast",
+  "linkLocal",
+  "loopback",
+  "private",
+  "reserved",
+  "carrierGradeNat"
+]);
+
+const SPECIAL_PURPOSE_V6_RANGES = new Set([
+  "unspecified",
+  "linkLocal",
+  "multicast",
+  "loopback",
+  "uniqueLocal",
+  "reserved"
+]);
 
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
@@ -178,6 +211,20 @@ export function ipToComparableHex(input: string): ComparableIp {
   };
 }
 
+/** 返回该 IP 所属的特殊用途段名（如 "private"、"linkLocal"），公网地址返回 null。 */
+export function specialPurposeRange(input: string): string | null {
+  if (!ipaddr.isValid(input)) {
+    return null;
+  }
+
+  const parsed = ipaddr.process(input);
+  const rangeName = parsed.range();
+  const known =
+    parsed.kind() === "ipv4" ? SPECIAL_PURPOSE_V4_RANGES : SPECIAL_PURPOSE_V6_RANGES;
+
+  return known.has(rangeName) ? rangeName : null;
+}
+
 function cleanIpInput(input: string): string {
   const trimmed = input.trim();
   if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
@@ -186,8 +233,7 @@ function cleanIpInput(input: string): string {
   return trimmed;
 }
 
-function resolveTargetIp(request: Request): TargetIp {
-  const url = new URL(request.url);
+function resolveTargetIp(request: Request, url: URL): TargetIp {
   const queryIp = url.searchParams.get("ip")?.trim();
   if (queryIp) {
     return { value: queryIp, source: "query" };
@@ -214,17 +260,26 @@ function resolveTargetIp(request: Request): TargetIp {
 async function lookupGeo(db: D1Database, cityDb: D1Database, ip: ComparableIp): Promise<GeoResult> {
   const cityLookup = cityDb
     .prepare(ip.version === 4 ? CITY_V4_LOOKUP_SQL : CITY_V6_LOOKUP_SQL)
-    .bind(ip.hex, ip.hex)
+    .bind(ip.hex)
     .first<CityRangeRow>();
   const countryLookup = db
     .prepare(COUNTRY_LOOKUP_SQL)
-    .bind(ip.version, ip.hex, ip.hex)
+    .bind(ip.version, ip.hex)
     .first<CountryRangeRow>();
   const asnLookup = db
     .prepare(ASN_LOOKUP_SQL)
-    .bind(ip.version, ip.hex, ip.hex)
+    .bind(ip.version, ip.hex)
     .first<AsnRangeRow>();
-  const [cityRow, countryRow, asnRow] = await Promise.all([cityLookup, countryLookup, asnLookup]);
+  const [cityCandidate, countryCandidate, asnCandidate] = await Promise.all([
+    cityLookup,
+    countryLookup,
+    asnLookup
+  ]);
+
+  // 候选区间是 start_hex <= ip 中 start 最大的那一行；只有 end_hex 也覆盖才算命中。
+  const cityRow = candidateContains(cityCandidate, ip) ? cityCandidate : null;
+  const countryRow = candidateContains(countryCandidate, ip) ? countryCandidate : null;
+  const asnRow = candidateContains(asnCandidate, ip) ? asnCandidate : null;
 
   if (!cityRow && !countryRow && !asnRow) {
     return emptyGeoResult();
@@ -273,6 +328,17 @@ function emptyGeoResult(): GeoResult {
     source: "d1",
     sources: []
   };
+}
+
+/** 候选行的 end_hex 是否覆盖目标 IP（hex 定长，字符串比较等价数值比较）。 */
+function candidateContains<T extends { end_hex?: string | null }>(
+  row: T | null,
+  ip: ComparableIp
+): row is T {
+  if (!row || typeof row.end_hex !== "string") {
+    return false;
+  }
+  return row.end_hex >= ip.hex;
 }
 
 function networkFor(geo: GeoResult): NetworkResult {
@@ -374,12 +440,11 @@ function headersToRecord(headers: Headers): Record<string, string> {
   return record;
 }
 
-function shouldServeWebUi(request: Request): boolean {
+function shouldServeWebUi(request: Request, url: URL): boolean {
   if (request.method !== "GET" && request.method !== "HEAD") {
     return false;
   }
 
-  const url = new URL(request.url);
   if (url.pathname !== "/" && url.pathname !== "/index.html") {
     return false;
   }
@@ -1010,21 +1075,25 @@ export default {
       return new Response(null, { status: 204, headers: JSON_HEADERS });
     }
 
-    const url = new URL(request.url);
-    if (shouldServeWebUi(request)) {
-      return htmlResponse(webUiHtml());
-    }
-
     try {
-      const target = resolveTargetIp(request);
+      const url = new URL(request.url);
+      if (shouldServeWebUi(request, url)) {
+        return htmlResponse(webUiHtml());
+      }
+
+      const target = resolveTargetIp(request, url);
       const comparableIp = ipToComparableHex(target.value);
-      const geo = await lookupGeo(env.DB, env.CITY_DB, comparableIp);
+      const specialRange = specialPurposeRange(comparableIp.ip);
+      const geo = specialRange
+        ? emptyGeoResult()
+        : await lookupGeo(env.DB, env.CITY_DB, comparableIp);
 
       return jsonResponse({
         ip: {
           value: comparableIp.ip,
           version: comparableIp.version,
-          source: target.source
+          source: target.source,
+          specialRange
         },
         geo,
         network: networkFor(geo),
